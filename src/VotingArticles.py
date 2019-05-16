@@ -1,26 +1,27 @@
 import time
 import redis
+from GroupingArticles import *
 
 ONE_WEEK_IN_SECOND = 7 * 86400
 VOTE_SCORE = 420
 
-conn = redis.Redis(
-    host='localhost',
-    port=6379)
 
-
-def article_vote(user, article):
+def article_vote(conn, user, article):
     cutoff = time.time() - ONE_WEEK_IN_SECOND
-    if conn.zscore('time', article) < cutoff:
-        return
+    if conn.zscore('time:', article) < cutoff:
+        print(article + ' is expired')
+        return False
     article_id = article.partition(':')[-1]
     if conn.sadd('voted:' + article_id, user):
-        conn.zincrby('score:', article, VOTE_SCORE)
+        conn.zincrby('score:', VOTE_SCORE, article)
         conn.hincrby(article, 'votes', 1)
-    pass
+        return True
+    else:
+        print(user + ' already votes on ' + article)
+    return False
 
 
-def post_article(user, title, link):
+def post_article(conn, user, title, link):
     article_id = str(conn.incr('article:'))
     print('generated article_id: ' + article_id)
     voted = 'voted:' + article_id
@@ -44,9 +45,9 @@ def post_article(user, title, link):
     return article
 
 
-def get_articles_by_score(num):
+def get_articles_by_score(conn, num, key='score:'):
     articles_rt = []
-    articles = conn.zrevrange('score:', 0, num)
+    articles = conn.zrevrange(key, 0, num)
     for article in articles:
         article_info = conn.hgetall(article)
         article_info['id'] = article
@@ -56,7 +57,7 @@ def get_articles_by_score(num):
     pass
 
 
-def cleanup():
+def cleanup(conn):
     keys = conn.keys('*')
     for key in keys:
         conn.delete(key)
@@ -67,26 +68,45 @@ def cleanup():
     pass
 
 
-def main():
-    for i in range(10):
+def main(conn):
+    group_to_add = ['test_group1', 'test_group2']
+    for i in range(1, 10):
         # generate article and post
         user = 'user:' + str(i)
         title = 'test_title_' + str(i)
         link = 'http://test_link_' + str(i)
-        article = post_article(user, title, link)
+        article = post_article(conn, user, title, link)
+        if i % 2 == 0:
+            add_remove_groups(conn, article, to_add=group_to_add)
         print(article + " is post")
 
-    # get articles from redis
-    articles = get_articles_by_score(20)
+    ''' get articles from redis '''
+    articles = get_articles_by_score(conn, 20)
     for article in articles:
         print(article)
-    # clean up
-    cleanup()
+
+    ''' vote on articles '''
+    rt = article_vote(conn, 'user:2', 'article:4')
+    print('user:2 votes on article:4 is successful: ' + str(rt))
+    rt = article_vote(conn, 'user:2', 'article:2')
+    print('user:2 votes on article:2 is successful: ' + str(rt))
+
+    ''' group articles '''
+    grouped_articles = get_group_articles(conn, 'test_group1')
+    print("articles in test_group1")
+    for article in grouped_articles:
+        print(article)
+
+    ''' clean up '''
+    cleanup(conn)
     pass
 
 
 if __name__ == "__main__":
     print('===== program starts =====')
-    main()
+    conn = redis.Redis(
+        host='localhost',
+        port=6379)
+    main(conn)
     print('===== program ends =====')
     pass

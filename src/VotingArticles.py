@@ -67,8 +67,7 @@ def cleanup():
     pass
 
 
-if __name__ == "__main__":
-    print('program starts')
+def main():
     for i in range(10):
         # generate article and post
         user = 'user:' + str(i)
@@ -78,9 +77,16 @@ if __name__ == "__main__":
         print(article + " is post")
 
     # get articles from redis
-    articles=get_articles_by_score(20)
+    articles = get_articles_by_score(20)
     for article in articles:
         print(article)
     # clean up
     cleanup()
+    pass
+
+
+if __name__ == "__main__":
+    print('===== program starts =====')
+    main()
+    print('===== program ends =====')
     pass
